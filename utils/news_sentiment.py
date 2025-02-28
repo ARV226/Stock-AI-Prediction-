@@ -6,7 +6,7 @@ def get_news_sentiment(company_name):
     """Fetch news and calculate sentiment for a given company."""
     
     # Initialize NewsAPI client with default key if environment variable not set
-    api_key = os.getenv('NEWS_API_KEY', 'your_default_key')
+    api_key = os.getenv('NEWS_API_KEY', 'a0d81686b96d49bb9b6bf37b1db7b12c')
     newsapi = NewsApiClient(api_key=api_key)
     
     try:
