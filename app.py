@@ -1,15 +1,11 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objs as go
-import requests
+import investpy
 from datetime import datetime, timedelta
 from utils.stock_analysis import calculate_technical_indicators
 from utils.news_sentiment import get_news_sentiment
 from utils.prediction import predict_stock_price
-
-# Alpha Vantage config
-API_KEY = "HTQ5XE346QAFLKUI"  # Replace with your real key
-BASE_URL = "https://www.alphavantage.co/query"
 
 # Streamlit config
 st.set_page_config(
@@ -33,30 +29,27 @@ st.markdown("""
 
 @st.cache_data(ttl=3600)
 def get_stock_data(symbol):
-    params = {
-        "function": "TIME_SERIES_DAILY_ADJUSTED",
-        "symbol": symbol,
-        "outputsize": "full",
-        "apikey": API_KEY
-    }
-    response = requests.get(BASE_URL, params=params)
-    data = response.json()
+    name, exchange = symbol.split('.')
+    country = 'india'
 
-    if "Error Message" in data or "Note" in data:
-        raise RuntimeError("Rate limit exceeded or invalid symbol. Try again later.")
-
-    df = pd.DataFrame.from_dict(data["Time Series (Daily)"], orient="index", dtype=float)
-    df.index = pd.to_datetime(df.index)
-    df = df.rename(columns={
-        "1. open": "Open",
-        "2. high": "High",
-        "3. low": "Low",
-        "4. close": "Close",
-        "5. adjusted close": "Adj Close",
-        "6. volume": "Volume"
-    })
-    df.sort_index(inplace=True)
-    return df
+    try:
+        df = investpy.get_stock_historical_data(
+            stock=name,
+            country=country,
+            from_date=(datetime.today() - timedelta(days=1825)).strftime('%d/%m/%Y'),
+            to_date=datetime.today().strftime('%d/%m/%Y')
+        )
+        df.index = pd.to_datetime(df.index)
+        df = df.rename(columns={
+            "Open": "Open",
+            "High": "High",
+            "Low": "Low",
+            "Close": "Close",
+            "Volume": "Volume"
+        })
+        return df
+    except Exception as e:
+        raise RuntimeError(f"Error fetching data from investpy: {str(e)}")
 
 def main():
     st.title("📈 Stock Prediction & Analysis")
