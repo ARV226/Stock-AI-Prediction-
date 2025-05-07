@@ -27,6 +27,17 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# Caching stock data
+@st.cache_data(ttl=3600)
+def get_stock_data(ticker, period):
+    stock = yf.Ticker(ticker)
+    return stock.history(period=period)
+
+# Caching news sentiment
+@st.cache_data(ttl=1800)
+def get_cached_news_sentiment(ticker):
+    return get_news_sentiment(ticker)
+
 def main():
     st.title("📈 Stock Prediction & Analysis")
     
@@ -41,9 +52,8 @@ def main():
     if st.sidebar.button("Analyze"):
         try:
             with st.spinner('Fetching stock data...'):
-                # Get stock data
-                stock = yf.Ticker(ticker)
-                hist = stock.history(period=period)
+                st.write("✅ Fetching stock data")
+                hist = get_stock_data(ticker, period)
                 
                 if hist.empty:
                     st.error("No data found for the specified ticker.")
@@ -96,6 +106,7 @@ def main():
 
                 # Technical Analysis
                 st.subheader("Technical Analysis")
+                st.write("✅ Calculating technical indicators")
                 tech_indicators = calculate_technical_indicators(hist)
                 
                 # Display technical indicators in columns
@@ -110,19 +121,18 @@ def main():
                 # Price Prediction Section
                 st.subheader("Price Prediction (Next 7 Trading Days)")
 
-                if len(hist) < 30:  # Check minimum required data
+                if len(hist) < 30:
                     st.warning("Insufficient historical data for prediction. Please select a longer time period.")
                     return
 
                 try:
                     with st.spinner('Generating predictions...'):
+                        st.write("✅ Predicting stock prices")
                         predictions = predict_stock_price(hist)
 
                         if not predictions.empty:
-                            # Create figure with both historical and predicted data
                             pred_fig = go.Figure()
 
-                            # Add historical data (last 30 days)
                             pred_fig.add_trace(go.Scatter(
                                 x=hist.index[-30:],
                                 y=hist['Close'][-30:],
@@ -131,7 +141,6 @@ def main():
                                 line=dict(color='#1f77b4')
                             ))
 
-                            # Add predictions
                             pred_fig.add_trace(go.Scatter(
                                 x=predictions.index,
                                 y=predictions['Predicted'],
@@ -149,24 +158,19 @@ def main():
                                 hovermode='x unified'
                             )
 
-                            # Display prediction chart
                             st.plotly_chart(pred_fig, use_container_width=True)
 
-                            # Display prediction values
                             st.write("Predicted Values:")
                             try:
                                 styled_df = predictions.style.format("{:.2f}")
                                 try:
                                     styled_df = styled_df.background_gradient(cmap='RdYlGn', axis=0)
                                 except Exception:
-                                    # Fallback if gradient styling fails
                                     pass
                                 st.dataframe(styled_df)
-                            except Exception as e:
-                                # Fallback to basic display
+                            except Exception:
                                 st.dataframe(predictions.round(2))
 
-                            # Display prediction disclaimer
                             st.info("""
                                 ℹ️ Prediction Disclaimer:
                                 - Predictions are based on historical data and technical analysis
@@ -182,13 +186,20 @@ def main():
 
                 # News Sentiment
                 st.subheader("Recent News & Sentiment")
-                news_data = get_news_sentiment(ticker.split('.')[0])
-                
-                for news in news_data:
-                    with st.expander(news['title']):
-                        st.write(news['description'])
-                        st.write(f"Sentiment: {news['sentiment']}")
-                        st.write(f"Source: {news['source']}")
+                try:
+                    st.write("✅ Fetching news sentiment")
+                    news_data = get_cached_news_sentiment(ticker.split('.')[0])
+
+                    for news in news_data:
+                        with st.expander(news['title']):
+                            st.write(news['description'])
+                            st.write(f"Sentiment: {news['sentiment']}")
+                            st.write(f"Source: {news['source']}")
+                except Exception as e:
+                    if "429" in str(e) or "rate limit" in str(e).lower():
+                        st.warning("⚠️ Rate limit reached while fetching news. Please wait a few minutes and try again.")
+                    else:
+                        st.error(f"An error occurred while fetching news: {str(e)}")
 
         except Exception as e:
             st.error(f"An error occurred: {str(e)}")
