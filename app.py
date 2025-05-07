@@ -1,11 +1,17 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objs as go
-import investpy
+import requests
 from datetime import datetime, timedelta
 from utils.stock_analysis import calculate_technical_indicators
 from utils.news_sentiment import get_news_sentiment
 from utils.prediction import predict_stock_price
+from nsepython import nsefetch
+import numpy as np
+
+# Alpha Vantage config
+API_KEY = "HTQ5XE346QAFLKUI"  # Replace with your real key
+BASE_URL = "https://www.alphavantage.co/query"
 
 # Streamlit config
 st.set_page_config(
@@ -29,27 +35,36 @@ st.markdown("""
 
 @st.cache_data(ttl=3600)
 def get_stock_data(symbol):
-    name, exchange = symbol.split('.')
-    country = 'india'
+    if '.BSE' in symbol.upper():
+        raise ValueError("BSE symbols are not supported. Please use .NSE symbols.")
+    symbol = symbol.replace(".NSE", "").upper()
 
     try:
-        df = investpy.get_stock_historical_data(
-            stock=name,
-            country=country,
-            from_date=(datetime.today() - timedelta(days=1825)).strftime('%d/%m/%Y'),
-            to_date=datetime.today().strftime('%d/%m/%Y')
-        )
-        df.index = pd.to_datetime(df.index)
-        df = df.rename(columns={
-            "Open": "Open",
-            "High": "High",
-            "Low": "Low",
-            "Close": "Close",
-            "Volume": "Volume"
-        })
+        url = f"https://www.nseindia.com/api/chart-databyindex?index={symbol}"
+        headers = {
+            "User-Agent": "Mozilla/5.0",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br"
+        }
+        data = nsefetch(url)
+
+        prices = data['grapthData']
+        df = pd.DataFrame(prices, columns=["Timestamp", "Close"])
+        df["Date"] = pd.to_datetime(df["Timestamp"], unit="ms")
+        df.set_index("Date", inplace=True)
+        df["Close"] = df["Close"].astype(float)
+
+        # Simulate OHLC for charting
+        df["Open"] = df["Close"].shift(1).fillna(df["Close"])
+        df["High"] = df[["Open", "Close"]].max(axis=1) * np.random.uniform(1.00, 1.02, len(df))
+        df["Low"] = df[["Open", "Close"]].min(axis=1) * np.random.uniform(0.98, 1.00, len(df))
+        df["Volume"] = np.random.randint(100000, 500000, len(df))
+        df = df[["Open", "High", "Low", "Close", "Volume"]]
+
         return df
+
     except Exception as e:
-        raise RuntimeError(f"Error fetching data from investpy: {str(e)}")
+        raise RuntimeError(f"Failed to fetch NSE data: {str(e)}")
 
 def main():
     st.title("📈 Stock Prediction & Analysis")
