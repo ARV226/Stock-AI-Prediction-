@@ -50,45 +50,37 @@ def main():
     )
 
     if st.sidebar.button("Analyze"):
+    try:
+        with st.spinner('Fetching stock data...'):
+            # Enhanced: Fetch stock data with retries and caching
+            hist = cached_fetch_stock_data(ticker, period)
+            if hist.empty:
+                st.error("No data found or request was rate-limited. Please try again later.")
+                return
+
+        # Perform prediction and handle errors
         try:
-            with st.spinner('Fetching stock data...'):
-                # Get stock data
-                stock = yf.Ticker(ticker)
-                hist = stock.history(period=period)
+            with st.spinner('Generating predictions...'):
+                predictions = predict_stock_price(hist)
+
+                if not predictions.empty:
+                    st.subheader("Predicted Stock Prices")
+                    st.dataframe(predictions)
+                else:
+                    st.warning("Predictions could not be generated. Please try again later.")
+        except Exception as e:
+            st.error(f"Prediction error: {str(e)}")
+            st.warning("There was an issue with the prediction model. Please ensure sufficient historical data is available.")
+
+    except ValueError:
+        st.error("The application has reached the API's rate limit. Please try again in a few minutes.")
+        st.info("Tip: Avoid making repeated requests for the same stock. If the issue persists, try a different stock or time period.")
+
+    except Exception as e:
+        st.error(f"An unexpected error occurred: {str(e)}")
                 
-                if hist.empty:
-                    st.error("No data found or request was rate-limited. Please try again later.")
-                    return
-
-                # Create three columns
-                col1, col2, col3 = st.columns(3)
-
-                # Current Stock Info
-                with col1:
-                    current_price = hist['Close'].iloc[-1]
-                    price_change = hist['Close'].iloc[-1] - hist['Close'].iloc[-2]
-                    price_change_pct = (price_change / hist['Close'].iloc[-2]) * 100
-                    
-                    st.metric(
-                        "Current Price",
-                        f"₹{current_price:.2f}",
-                        f"{price_change_pct:.2f}%"
-                    )
-
-                with col2:
-                    st.metric(
-                        "Volume",
-                        f"{hist['Volume'].iloc[-1]:,.0f}",
-                        f"{((hist['Volume'].iloc[-1] - hist['Volume'].iloc[-2])/hist['Volume'].iloc[-2]*100):.2f}%"
-                    )
-
-                with col3:
-                    st.metric(
-                        "52 Week High",
-                        f"₹{hist['High'].max():.2f}"
-                    )
-
-                # Stock Price Chart
+        
+    # Stock Price Chart
                 st.subheader("Stock Price Chart")
                 fig = go.Figure()
                 fig.add_trace(go.Candlestick(
