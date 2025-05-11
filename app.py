@@ -27,6 +27,16 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# Cache the stock data to avoid hitting rate limits
+@st.cache_data(ttl=3600)
+def get_cached_stock_data(ticker, period):
+    try:
+        stock = yf.Ticker(ticker)
+        hist = stock.history(period=period)
+        return hist
+    except Exception:
+        return pd.DataFrame()  # Return empty DataFrame if error occurs
+
 def main():
     st.title("📈 Stock Prediction & Analysis")
     
@@ -41,12 +51,11 @@ def main():
     if st.sidebar.button("Analyze"):
         try:
             with st.spinner('Fetching stock data...'):
-                # Get stock data
-                stock = yf.Ticker(ticker)
-                hist = stock.history(period=period)
+                # Use cached function instead of direct yfinance call
+                hist = get_cached_stock_data(ticker, period)
                 
                 if hist.empty:
-                    st.error("No data found for the specified ticker.")
+                    st.error("No data found or request was rate-limited. Please try again later.")
                     return
 
                 # Create three columns
