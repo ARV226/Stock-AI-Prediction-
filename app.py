@@ -6,6 +6,17 @@ from datetime import datetime, timedelta
 from utils.stock_analysis import calculate_technical_indicators
 from utils.news_sentiment import get_news_sentiment
 from utils.prediction import predict_stock_price
+import requests  # Added for patching yfinance
+
+# ✅ Monkey patch yfinance to use browser headers (bypass rate-limiting)
+session = requests.Session()
+session.headers.update({
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.5",
+    "Connection": "keep-alive"
+})
+yf.shared._requests = session  # monkey-patch session used by yfinance
 
 # Page config
 st.set_page_config(
@@ -27,16 +38,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Cache the stock data to avoid hitting rate limits
-@st.cache_data(ttl=3600)
-def get_cached_stock_data(ticker, period):
-    try:
-        stock = yf.Ticker(ticker)
-        hist = stock.history(period=period)
-        return hist
-    except Exception:
-        return pd.DataFrame()  # Return empty DataFrame if error occurs
-
 def main():
     st.title("📈 Stock Prediction & Analysis")
     
@@ -51,8 +52,9 @@ def main():
     if st.sidebar.button("Analyze"):
         try:
             with st.spinner('Fetching stock data...'):
-                # Use cached function instead of direct yfinance call
-                hist = get_cached_stock_data(ticker, period)
+                # Get stock data
+                stock = yf.Ticker(ticker)
+                hist = stock.history(period=period)
                 
                 if hist.empty:
                     st.error("No data found or request was rate-limited. Please try again later.")
